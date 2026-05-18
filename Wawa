@@ -18,12 +18,12 @@ local Settings = {
     AutoHop = true, -- Toggles Server Hop jika monster tidak ditemukan (Default OFF)
     HopDelay = 3,    -- Waktu tunggu (detik) sebelum mulai hop saat monster kosong
     
-    AutoFarm = true, AutoAttack = true, MultiAttack4 = true, AutoCollect = true, AutoRebirth = false,
+    AutoFarm = true, AutoAttack = true, MultiAttack4 = true, AutoCollect = true, AutoRebirth = true,
     AutoPotionV1 = false, AutoPotionV2 = true, SilentSell = false,
     AutoQuest = true, AntiAFK = true,
-    Speed = 2, Height = 25, AttackDelay = 0, Radius = 35, 
+    Speed = 100, Height = 25, AttackDelay = 0, Radius = 45, 
     PotionSpeed = 6, PotionLimit = 0, PotionCounter = 0,
-    ActiveIDs = {["5000005"] = true }, 
+    ActiveIDs = {["5000005"] = false }, 
 PriorityIDs = { ["5000006"] = true, ["5001006"] = true },     SelectedQuests = {
         ["\228\187\187\229\138\1616"] = true, -- Orc King (Default ON)
         ["\228\187\187\229\138\1615"] = true  -- Archer Goblin (Default ON)
