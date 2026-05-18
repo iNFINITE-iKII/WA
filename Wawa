@@ -23,8 +23,8 @@ local Settings = {
     AutoQuest = true, AntiAFK = true,
     Speed = 100, Height = 25, AttackDelay = 0, Radius = 45, 
     PotionSpeed = 6, PotionLimit = 0, PotionCounter = 0,
-    ActiveIDs = {["5000005"] = false }, 
-PriorityIDs = { ["5000006"] = true, ["5001006"] = false },     SelectedQuests = {
+    ActiveIDs = {}, 
+PriorityIDs = { ["5000006"] = true },     SelectedQuests = {
         ["\228\187\187\229\138\1616"] = true, -- Orc King (Default ON)
         ["\228\187\187\229\138\1615"] = true  -- Archer Goblin (Default ON)
     },
