@@ -1,0 +1,948 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Cleanup UI Lama
+if playerGui:FindFirstChild("KIIBOO_ULTIMATE_FINAL") then playerGui.KIIBOO_ULTIMATE_FINAL:Destroy() end
+
+--------------------------------------------------
+-- CONFIG & SETTINGS
+--------------------------------------------------
+local Settings = {
+    AutoHop = true, 
+    HopDelay = 3,  
+    AutoUpgradeMaterialBag = false,
+    AutoUpgradePotionBag = false,
+    AutoBuyWand30 = false,
+AutoBuyWand20 = false,
+AntiRender = true,
+AutoFarm = true, 
+AutoAttack = true, 
+MultiAttack4 = true, 
+AutoCollect = true, 
+AutoRebirth = true,
+    AutoPotionV1 = false, 
+AutoPotionV2 = true, 
+SilentSell = false,
+
+    AutoQuest = true, AntiAFK = true,
+    OrbitSpeed = 100000, 
+Height = 35, 
+AttackDelay = 0, 
+Radius = 35, 
+    PotionSpeed = 6, 
+PotionLimit = 0, 
+PotionCounter = 0,
+    ActiveIDs = {["5000005"] = true }, 
+PriorityIDs = { ["5000006"] = true },     SelectedQuests = {
+        ["\228\187\187\229\138\1616"] = true,
+       ["\228\187\187\229\138\1615"] = true,
+       ["\228\187\187\229\138\1614"]= true,
+      ["\228\187\187\229\138\1613"]= true,
+      ["\228\187\187\229\138\1612"]= true
+    },
+
+    AutoStats = {
+        ["39"] = {enabled = false, amount = 1}, -- Attack (Atk Speed)
+        ["1"]  = {enabled = true, amount = 1}, -- Health
+        ["5"]  = {enabled = false, amount = 1}, -- Cooling Reduction
+        ["41"] = {enabled = false, amount = 1}  -- Move Speed
+    }
+}
+
+-- Konfigurasi Fitur Give Baru
+local AutoGiveEnabled = false
+local SelectedTargetPlayer = nil 
+
+local AllIDs = {
+    Farm = {
+        {id = "5001001", name = "Blueberry Bush"}, {id = "5001002", name = "Mushroom"},
+        {id = "5001003", name = "Bird Nest"}, {id = "5001004", name = "Big Blueberry"},
+        {id = "5001005", name = "Big Mushroom"}, {id = "5001006", name = "Big Bird Nest"}
+    },
+        Monster = {
+        {id = "5000001", name = "Pickaxe Dwarf"}, {id = "5000002", name = "Warhammer Dwarf"},
+        {id = "5000003", name = "Goblin King"}, {id = "5000004", name = "Knife Goblin"},
+        {id = "5000005", name = "Archer Goblin"}, {id = "5000006", name = "Orc King"},
+        {id = "5000007", name = "Mutant Warhammer Dwarf"}, -- Tambahan Baru
+        {id = "5000008", name = "Mutant Archer Goblin"}     -- Tambahan Baru
+    },
+
+    Quests = {
+        {Name = "Orc King", ID = "\228\187\187\229\138\1616"},
+        {Name = "Archer Goblin", ID = "\228\187\187\229\138\1615"},
+        {Name = "Warhammer Dwarf", ID = "\228\187\187\229\138\1614"},
+        {Name = "Knife Goblin", ID = "\228\187\187\229\138\1613"},
+        {Name = "Pickaxe Dwarf", ID = "\228\187\187\229\138\1612"}
+    }
+}
+
+local PotionList = {
+    {id = "2000001", name = "Blueberry"},
+    {id = "2000002", name = "Mushroom"},
+    {id = "2000003", name = "Seagull Egg"},
+    {id = "2000004", name = "Dwarf Emblem"},
+    {id = "2000005", name = "Golden Tooth"},
+    {id = "2000006", name = "Flame Crest"},
+    {id = "2000007", name = "Goblin Finger"},
+    {id = "2000008", name = "Goblin Bone"},
+    {id = "2000009", name = "Copper Earring"},
+    {id = "2000010", name = "Furnace Core"}
+}
+
+local PotionMaterials = {}
+for _, p in pairs(PotionList) do 
+    PotionMaterials[p.id] = {count = 0, selected = false, displayName = p.name} 
+end
+
+-- Remotes & Folders Verification
+local Msg = ReplicatedStorage:WaitForChild("Msg")
+local RemoteFunc = Msg:WaitForChild("RemoteFunction"):WaitForChild("RemoteFunction")
+local RemoteEvent = Msg:WaitForChild("RemoteEvent"):WaitForChild("RemoteEvent")
+local SkillEvent = Msg:WaitForChild("RemoteEvent"):WaitForChild("ReleaseGroupSkill")
+local talkFunc = Msg:WaitForChild("Function"):WaitForChild("TalkFunc")
+local monsterFolder = workspace:WaitForChild("Monster")
+
+-- Remotes untuk Fitur Give
+local RemoteEventFolder = Msg:WaitForChild("RemoteEvent", 5)
+local GiftRequest = RemoteEventFolder and RemoteEventFolder:WaitForChild("GiftRequest", 5)
+
+local lastAttack = 0
+local lastSkill12Attack = 0 -- Variabel baru untuk melacak timer 3 detik
+
+--------------------------------------------------
+-- UTILITY & ANTI-AFK
+--------------------------------------------------
+local function SendStatPoint(id, amount)
+    pcall(function()
+        RemoteFunc:InvokeServer("\229\177\158\230\128\167\229\138\160\231\130\185", {
+            AttrTp = tonumber(id), 
+            PointNum = tonumber(amount) or 1
+        })
+    end)
+end
+
+task.spawn(function()
+    local Vu = game:GetService("VirtualUser")
+    player.Idled:Connect(function()
+        if Settings.AntiAFK then
+            Vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            Vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end
+    end)
+end)
+
+local TeleportService = game:GetService("TeleportService")
+local hopTimer = 0 -- Variabel internal pelacak durasi monster kosong
+
+local function ServerHop()
+    local success, errorMessage = pcall(function()
+        local serverList = {}
+        -- Mengambil daftar server aktif dari game API
+        local req = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+        
+        for _, server in ipairs(req.data) do
+            -- Cari server yang masih muat player lain tetapi bukan server saat ini
+            if server.id ~= game.JobId and tostring(server.playing) < tostring(server.maxPlayers) then
+                table.insert(serverList, server.id)
+            end
+        end
+        
+        if #serverList > 0 then
+            -- Pilih server acak dari daftar yang valid
+            local randomServer = serverList[math.random(1, #serverList)]
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, player)
+        else
+            -- Jika gagal menemukan server spesifik, gunakan teleportasi standar
+            TeleportService:Teleport(game.PlaceId, player)
+        end
+    end)
+    
+    if not success then
+        print("KIIBOO LOG: Gagal mencari server, mencoba ulang standar teleport. Error: " .. tostring(errorMessage))
+        TeleportService:Teleport(game.PlaceId, player)
+    end
+end
+
+--------------------------------------------------
+-- UI BUILDER (MAIN & NEW TABS)
+--------------------------------------------------
+local gui = Instance.new("ScreenGui", playerGui); gui.Name = "KIIBOO_ULTIMATE_FINAL"; gui.ResetOnSpawn = false
+local main = Instance.new("Frame", gui); main.Size = UDim2.new(0, 350, 0, 280); main.Position = UDim2.new(0.5, -250, 0.5, -210); main.BackgroundColor3 = Color3.fromRGB(15, 15, 15); Instance.new("UICorner", main)
+
+local toggleBtn = Instance.new("TextButton", gui); toggleBtn.Size = UDim2.new(0, 50, 0, 50); toggleBtn.Position = UDim2.new(0, 10, 0.5, -25); toggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); toggleBtn.Text = "KB"; toggleBtn.TextColor3 = Color3.new(0, 1, 0.5); toggleBtn.Font = "GothamBold"; Instance.new("UICorner", toggleBtn)
+
+toggleBtn.MouseButton1Click:Connect(function() main.Visible = not main.Visible end)
+
+local bar = Instance.new("Frame", main); bar.Size = UDim2.new(1,0,0,50); bar.BackgroundColor3 = Color3.fromRGB(25,25,25); Instance.new("UICorner", bar)
+
+-- Logika Draggable UI untuk Top Bar
+local dragging, dragInput, dragStart, startPos
+
+bar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+bar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+
+local tabs, pages = {}, {}
+-- Menambahkan tab "Give" ke dalam urutan tab utama UI
+local tabNames = {"Main", "Farm", "Monster", "Priority", "Potion", "Quest", "Stats", "Give"}
+
+for i, name in ipairs(tabNames) do
+    local b = Instance.new("TextButton", bar); b.Size = UDim2.new(1/#tabNames, 0, 1, 0); b.Position = UDim2.new((i-1)*(1/#tabNames), 0, 0, 0); b.Text = name:upper(); b.BackgroundColor3 = Color3.fromRGB(30,30,30); b.TextColor3 = Color3.new(0.9,0.9,0.9); b.BorderSizePixel = 0; b.Font = "GothamBold"; b.TextSize = 7
+    local p = Instance.new("ScrollingFrame", main); p.Size = UDim2.new(1,-10,1,-45); p.Position = UDim2.new(0,5,0,40); p.BackgroundTransparency = 1; p.Visible = (name == "Main"); p.ScrollBarThickness = 2; p.AutomaticCanvasSize = "Y"
+    Instance.new("UIListLayout", p).Padding = UDim.new(0,5)
+    tabs[name] = b; pages[name] = p
+    b.MouseButton1Click:Connect(function() for _,pg in pairs(pages) do pg.Visible = false end p.Visible = true end)
+end
+
+-- Modular Components
+local function makeToggle(txt, key, p, mode)
+    local btn = Instance.new("TextButton", p); btn.Size = UDim2.new(1,-10,0,32); btn.BackgroundColor3 = Color3.fromRGB(25,25,25); btn.Text = "  "..txt; btn.TextColor3 = Color3.new(0.8,0.8,0.8); btn.TextXAlignment = "Left"; btn.Font = "Gotham"; btn.TextSize = 11; Instance.new("UICorner", btn)
+    local ind = Instance.new("Frame", btn); ind.Size = UDim2.new(0,8,0,8); ind.Position = UDim2.new(1,-20,0.5,-4); ind.BackgroundColor3 = Color3.new(0.6,0,0); Instance.new("UICorner", ind)
+    
+    btn.MouseButton1Click:Connect(function()
+        if mode == "Normal" then Settings.ActiveIDs[key] = not Settings.ActiveIDs[key]
+        elseif mode == "Priority" then Settings.PriorityIDs[key] = not Settings.PriorityIDs[key]
+        elseif mode == "Quest" then Settings.SelectedQuests[key] = not Settings.SelectedQuests[key]
+        elseif mode == "StatToggle" then Settings.AutoStats[key].enabled = not Settings.AutoStats[key].enabled
+        else Settings[key] = not Settings[key] end
+    end)
+    
+    RunService.RenderStepped:Connect(function()
+        local val = (mode == "Normal" and Settings.ActiveIDs[key]) or (mode == "Priority" and Settings.PriorityIDs[key]) or (mode == "Quest" and Settings.SelectedQuests[key]) or (mode == "StatToggle" and Settings.AutoStats[key].enabled) or Settings[key]
+        ind.BackgroundColor3 = val and Color3.new(0,0.8,0.4) or Color3.new(0.6,0,0)
+    end)
+    return btn
+end
+
+local function makeInput(txt, key, p, mode)
+    local f = Instance.new("Frame", p); f.Size = UDim2.new(1,-10,0,32); f.BackgroundTransparency = 1
+    local l = Instance.new("TextLabel", f); l.Size = UDim2.new(0.6,0,1,0); l.Text = " "..txt; l.TextColor3 = Color3.new(0.7,0.7,0.7); l.BackgroundTransparency = 1; l.TextXAlignment = "Left"; l.Font = "Gotham"; l.TextSize = 10
+    local b = Instance.new("TextBox", f); b.Size = UDim2.new(0.3,0,0.8,0); b.Position = UDim2.new(0.65,0,0.1,0); b.BackgroundColor3 = Color3.fromRGB(35,35,35); b.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", b)
+    
+    if mode == "StatAmount" then
+        b.Text = tostring(Settings.AutoStats[key].amount)
+        b.FocusLost:Connect(function() if tonumber(b.Text) then Settings.AutoStats[key].amount = tonumber(b.Text) end end)
+    else
+        b.Text = tostring(Settings[key])
+        b.FocusLost:Connect(function() if tonumber(b.Text) then Settings[key] = tonumber(b.Text) end end)
+    end
+end
+
+--------------------------------------------------
+-- POPULATE TABS
+--------------------------------------------------
+
+-- Main
+-- Main
+
+makeToggle("AUTO HOP (IF NO MONSTER)", "AutoHop", pages.Main) -- <--- TAMBAHKAN BARIS INI
+makeToggle("AUTO FARM", "AutoFarm", pages.Main)
+makeToggle("ANTI RENDER (FPS BOOST)", "AntiRender", pages.Main)
+makeToggle("AUTO UPGRADE MATERIAL BAG", "AutoUpgradeMaterialBag", pages.Main)
+makeToggle("AUTO UPGRADE POTION BAG", "AutoUpgradePotionBag", pages.Main)
+-- Tambahkan ini di bagian bawah deretan makeToggle untuk halaman Main
+makeToggle("AUTO BUY WAND Fire", "AutoBuyWand30", pages.Main)
+makeToggle("AUTO BUY WAND 20 Ice ", "AutoBuyWand20", pages.Main)
+makeToggle("ANTI-AFK", "AntiAFK", pages.Main)
+makeToggle("AUTO ATTACK (SKILL 1,2,4)", "AutoAttack", pages.Main)
+makeToggle("ONLY MULTI ATTACK SKILL 4", "MultiAttack4", pages.Main)
+makeToggle("AUTO COLLECT", "AutoCollect", pages.Main)
+makeToggle("AUTO REBIRTH", "AutoRebirth", pages.Main)
+makeToggle("AUTO QUEST", "AutoQuest", pages.Main)
+makeToggle("AUTO SELL ALL", "SilentSell", pages.Main)
+makeInput("Farm Height", "Height", pages.Main)
+makeInput("Tween Speed", "Speed", pages.Main)
+makeInput("Attack Delay", "AttackDelay", pages.Main)
+makeInput("Orbit Radius", "Radius", pages.Main) 
+makeInput("Orbit Speed", "OrbitSpeed", pages.Main)
+
+-- Farm & Monster & Priority
+for _, i in pairs(AllIDs.Farm) do makeToggle(i.name, i.id, pages.Farm, "Normal"); makeToggle("[P] "..i.name, i.id, pages.Priority, "Priority") end
+for _, m in pairs(AllIDs.Monster) do makeToggle(m.name, m.id, pages.Monster, "Normal"); makeToggle("[P] "..m.name, m.id, pages.Priority, "Priority") end
+
+-- Quest
+for _, q in pairs(AllIDs.Quests) do makeToggle(q.Name, q.ID, pages.Quest, "Quest") end
+
+-- Stats
+local orderedStats = {
+   {name = "Attack", id = "39"},
+   {name = "Health", id = "1"},
+   {name = "Cooling Reduction", id = "5"},
+   {name = "Move Speed", id = "41"}
+}
+
+for _, s in pairs(orderedStats) do
+    local sContainer = Instance.new("Frame", pages.Stats); sContainer.Size = UDim2.new(1,-10,0,75); sContainer.BackgroundColor3 = Color3.fromRGB(22, 22, 25); Instance.new("UICorner", sContainer)
+    local list = Instance.new("UIListLayout", sContainer); list.Padding = UDim.new(0,2)
+    
+    makeToggle("Auto " .. s.name, s.id, sContainer, "StatToggle")
+    makeInput("  Add Amount:", s.id, sContainer, "StatAmount")
+end
+
+local resetBtn = Instance.new("TextButton", pages.Stats); resetBtn.Size = UDim2.new(1,-10,0,35); resetBtn.BackgroundColor3 = Color3.fromRGB(150,0,0); resetBtn.Text = "RESET ALL STATS"; resetBtn.TextColor3 = Color3.new(1,1,1); resetBtn.Font = "GothamBold"; Instance.new("UICorner", resetBtn)
+resetBtn.MouseButton1Click:Connect(function() RemoteFunc:InvokeServer("\233\135\141\231\189\174\229\177\158\230\128\167\231\130\185") end)
+
+-- Potion
+makeToggle("POTION V1 (MIX)", "AutoPotionV1", pages.Potion)
+makeToggle("POTION V2 (BATCH)", "AutoPotionV2", pages.Potion)
+makeInput("Potion Speed", "PotionSpeed", pages.Potion)
+
+local DefaultOnPotions = {
+    ["2000009"] = true, -- Copper Earring (Default ON)
+    ["2000010"] = true, -- Furnace Core (Default ON)
+}
+
+-- Menggunakan ipairs(PotionList) agar data tidak hilang dan urutannya rapi
+for _, p in ipairs(PotionList) do
+    local id = p.id
+    local data = PotionMaterials[id]
+    
+    -- Mengaktifkan status true jika terdaftar di atas
+    if DefaultOnPotions[id] then
+        data.selected = true
+    end
+
+    local f = Instance.new("Frame", pages.Potion); f.Size = UDim2.new(1,-10,0,35); f.BackgroundColor3 = Color3.fromRGB(25,25,25); Instance.new("UICorner", f)
+    local t = Instance.new("TextButton", f); t.Size = UDim2.new(0.6,0,1,0); t.Text = "  " .. data.displayName; t.TextColor3 = Color3.new(1,1,1); t.BackgroundTransparency = 1; t.TextXAlignment = "Left"; t.Font = "Gotham"; t.TextSize = 10
+    local b = Instance.new("TextBox", f); b.Size = UDim2.new(0.3,0,0.7,0); b.Position = UDim2.new(0.65,0,0.15,0); b.BackgroundColor3 = Color3.fromRGB(40,40,40); b.Text = "5"; b.TextColor3 = Color3.new(0,1,0); Instance.new("UICorner", b)
+    
+    -- Set jumlah bawaan agar langsung sinkron dengan teks b (5)
+    data.count = tonumber(b.Text) or 0
+    
+    t.MouseButton1Click:Connect(function() 
+        data.selected = not data.selected
+    end)
+    
+    -- Loop render warna teks berdasarkan status aktif
+    RunService.RenderStepped:Connect(function()
+        if data.selected then
+            t.TextColor3 = Color3.fromRGB(46, 204, 113) -- Hijau Neon
+        else
+            t.TextColor3 = Color3.fromRGB(230, 230, 230) -- Putih/Abu terang
+        end
+    end)
+
+    b.FocusLost:Connect(function() data.count = tonumber(b.Text) or 0 end)
+end
+
+--------------------------------------------------
+-- BUILD POPULATE: GIVE TAB (INTEGRATION)
+--------------------------------------------------
+local TitleGive = Instance.new("TextLabel", pages.Give)
+TitleGive.Size = UDim2.new(1, -10, 0, 25)
+TitleGive.Text = "KIIBOO GIVE MENU V2"
+TitleGive.Font = "GothamBold"
+TitleGive.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleGive.TextSize = 13
+TitleGive.BackgroundTransparency = 1
+
+local ToggleGiveBtn = Instance.new("TextButton", pages.Give)
+ToggleGiveBtn.Size = UDim2.new(1, -10, 0, 40)
+ToggleGiveBtn.Font = "GothamBold"
+ToggleGiveBtn.TextSize = 12
+ToggleGiveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", ToggleGiveBtn).CornerRadius = UDim.new(0, 6)
+
+local DropdownGiveBtn = Instance.new("TextButton", pages.Give)
+DropdownGiveBtn.Size = UDim2.new(1, -10, 0, 35)
+DropdownGiveBtn.Text = "Pilih Player v"
+DropdownGiveBtn.Font = "Gotham"
+DropdownGiveBtn.TextSize = 12
+DropdownGiveBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+DropdownGiveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", DropdownGiveBtn).CornerRadius = UDim.new(0, 6)
+
+local DropdownGiveScroll = Instance.new("ScrollingFrame", pages.Give)
+DropdownGiveScroll.Size = UDim2.new(1, -10, 0, 120)
+DropdownGiveScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+DropdownGiveScroll.Visible = false
+DropdownGiveScroll.ScrollBarThickness = 4
+DropdownGiveScroll.CanvasSize = UDim2.new(0,0,0,0)
+Instance.new("UICorner", DropdownGiveScroll).CornerRadius = UDim.new(0, 6)
+
+local GiveListLayout = Instance.new("UIListLayout", DropdownGiveScroll)
+GiveListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function updateGiveButtonDisplay()
+    if AutoGiveEnabled then
+        ToggleGiveBtn.Text = "STATUS: ACTIVE (ON)"
+        ToggleGiveBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+    else
+        ToggleGiveBtn.Text = "STATUS: PAUSED (OFF)"
+        ToggleGiveBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    end
+end
+updateGiveButtonDisplay()
+
+local function refreshGiveDropdown()
+    for _, child in ipairs(DropdownGiveScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl ~= player then
+            local PBtn = Instance.new("TextButton", DropdownGiveScroll)
+            PBtn.Size = UDim2.new(1, 0, 0, 30)
+            PBtn.Text = pl.Name
+            PBtn.Font = "Gotham"
+            PBtn.TextSize = 11
+            PBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+            PBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            PBtn.BorderSizePixel = 0
+            
+            PBtn.MouseButton1Click:Connect(function()
+                SelectedTargetPlayer = pl
+                DropdownGiveBtn.Text = "Target: " .. pl.Name
+                DropdownGiveScroll.Visible = false
+            end)
+        end
+    end
+    DropdownGiveScroll.CanvasSize = UDim2.new(0, 0, 0, GiveListLayout.AbsoluteContentSize.Y)
+end
+
+DropdownGiveBtn.MouseButton1Click:Connect(function()
+    DropdownGiveScroll.Visible = not DropdownGiveScroll.Visible
+    if DropdownGiveScroll.Visible then refreshGiveDropdown() end
+end)
+
+ToggleGiveBtn.MouseButton1Click:Connect(function()
+    if not SelectedTargetPlayer and not AutoGiveEnabled then
+        DropdownGiveBtn.Text = "PILIH PLAYER DULU!"
+        return
+    end
+    AutoGiveEnabled = not AutoGiveEnabled
+    updateGiveButtonDisplay()
+end)
+
+--------------------------------------------------
+-- GAME LOGIC LOOPS
+--------------------------------------------------
+
+-- Loop: Auto Stats
+task.spawn(function()
+    while true do
+        task.wait(0.6)
+        for id, stat in pairs(Settings.AutoStats) do
+            if stat.enabled then SendStatPoint(id, stat.amount) end
+        end
+    end
+end)
+
+-- Loop: Auto Quest
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if Settings.AutoQuest then
+            for qID, active in pairs(Settings.SelectedQuests) do
+                if active then
+                    pcall(function() talkFunc:InvokeServer("\229\143\145\230\148\190\228\187\187\229\138\161", {qID}) end)
+                    task.wait(0.5)
+                    pcall(function() 
+                        RemoteEvent:FireServer("\232\167\166\229\143\145\232\129\138\229\164\169", {"\229\147\136\229\136\169\229\155\160\231\137\185", "10010100"})
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+--------------------------------------------------
+-- GAME LOGIC LOOPS: FARM & ATTACK + AUTO SPAWN TELEPORT
+--------------------------------------------------
+
+local currentTarget = nil
+local EntitiesPos = workspace:WaitForChild("EntitiesPos", 5)
+
+-- Fungsi untuk mencari koordinat titik spawn monster berdasarkan ID
+local function getSpawnPosition(monsterId)
+    if not EntitiesPos then return nil end
+    for _, posObj in ipairs(EntitiesPos:GetChildren()) do
+        -- Mengecek apakah nama objek di EntitiesPos mengandung ID monster yang dicari
+        if string.find(posObj.Name, tostring(monsterId)) and (posObj:IsA("BasePart") or posObj:IsA("Model")) then
+            return posObj:IsA("BasePart") and posObj.Position or posObj:GetPivot().Position
+        end
+    end
+    return nil
+end
+
+RunService.Heartbeat:Connect(function()
+    if not Settings.AutoFarm then 
+        currentTarget = nil
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.PlatformStand = false
+        end
+        return 
+    end
+    
+    local char = player.Character
+    local hrp, hum = char and char:FindFirstChild("HumanoidRootPart"), char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    local function getWeapon()
+        local t = char:FindFirstChildOfClass("Tool") or player.Backpack:FindFirstChildOfClass("Tool")
+        return t and (t:GetAttribute("ID") or (t:FindFirstChild("ID") and t.ID.Value))
+    end
+
+    local function isValidTarget(monster)
+        if not monster or not monster.Parent or not monster:IsDescendantOf(workspace) then return false end
+        local mHum = monster:FindFirstChildOfClass("Humanoid")
+        if mHum and mHum.Health <= 0 then return false end
+        local mPart = monster:FindFirstChild("HumanoidRootPart") or monster.PrimaryPart
+        if not mPart then return false end
+        return true
+    end
+
+    --------------------------------------------------
+    -- SYSTEM FIX: VALIDASI REAL-TIME INPUT UI
+    --------------------------------------------------
+    if currentTarget and isValidTarget(currentTarget) then
+        local currentID = tostring(currentTarget:GetAttribute("ID") or (currentTarget:FindFirstChild("ID") and currentTarget.ID.Value))
+        
+        -- JIKA MONSTER YANG SEDANG DISERANG TERNYATA SUDAH DIMATIKAN DI UI (BAIK PRIORITY MAUPUN NORMAL), LANGSUNG LEPAS!
+        if not Settings.PriorityIDs[currentID] and not Settings.ActiveIDs[currentID] then
+            currentTarget = nil
+        else
+            -- INTERUPSI MUTLAK: Jika target saat ini adalah Monster Normal, tapi tiba-tiba ada Priority ID yang aktif & spawn, LANGSUNG DEPAK!
+            if not Settings.PriorityIDs[currentID] then
+                for _, v in pairs(monsterFolder:GetChildren()) do
+                    if isValidTarget(v) then
+                        local mID = tostring(v:GetAttribute("ID") or (v:FindFirstChild("ID") and v.ID.Value))
+                        if Settings.PriorityIDs[mID] then
+                            currentTarget = nil 
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Jika target mati, hancur, atau tidak valid, hapus instan dari lock-on
+    if currentTarget and not isValidTarget(currentTarget) then
+        currentTarget = nil
+    end
+
+    --------------------------------------------------
+    -- 1. SCAN TARGET BARU (DENGAN HIERARKI KETAT)
+    --------------------------------------------------
+    if not currentTarget then
+        local validPriorities = {}
+        local validNormals = {}
+
+        for _, v in pairs(monsterFolder:GetChildren()) do
+            if isValidTarget(v) then
+                local mID = tostring(v:GetAttribute("ID") or (v:FindFirstChild("ID") and v.ID.Value))
+                local pPart = v:FindFirstChild("HumanoidRootPart") or v.PrimaryPart
+                local distance = (pPart.Position - hrp.Position).Magnitude
+
+                if Settings.PriorityIDs[mID] then
+                    table.insert(validPriorities, {monster = v, dist = distance})
+                elseif Settings.ActiveIDs[mID] then
+                    table.insert(validNormals, {monster = v, dist = distance})
+                end
+            end
+        end
+
+        -- Ambil prioritas paling utama terlebih dahulu
+        if #validPriorities > 0 then
+            pcall(function() table.sort(validPriorities, function(a, b) return a.dist < b.dist end) end)
+            currentTarget = validPriorities[1].monster
+        elseif #validNormals > 0 then
+            pcall(function() table.sort(validNormals, function(a, b) return a.dist < b.dist end) end)
+            currentTarget = validNormals[1].monster
+        end
+    end
+
+    --------------------------------------------------
+    -- 2. LOGIKA TELEPORT KE ENTITIESPOS / AUTO SERVER HOP
+    --------------------------------------------------
+    if not currentTarget then
+        local targetIDToFind = nil
+        
+        -- Cari tahu ID mana yang statusnya On/True di UI saat ini (Dahulukan Priority)
+        for id, enabled in pairs(Settings.PriorityIDs) do
+            if enabled then targetIDToFind = id break end
+        end
+        if not targetIDToFind then
+            for id, enabled in pairs(Settings.ActiveIDs) do
+                if enabled then targetIDToFind = id break end
+            end
+        end
+
+        -- Jika tidak ada satu pun list yang ON di UI, matikan paksa PlatformStand agar player bisa bergerak normal kembali
+        if not targetIDToFind then
+            hopTimer = 0 -- Reset timer karena user memang tidak memilih monster apapun
+            if hum.PlatformStand then hum.PlatformStand = false end
+            return
+        end
+
+        -- [LOGIKA TAMBAHAN: AUTO SERVER HOP TRIGER]
+        if Settings.AutoHop then
+            if hopTimer == 0 then
+                hopTimer = tick() -- Mulai hitung waktu sejak monster terdeteksi kosong
+            elseif tick() - hopTimer >= (tonumber(Settings.HopDelay) or 8) then
+                hopTimer = 0 -- Reset tracker sebelum pindah
+                print("KIIBOO LOG: Monster tidak ditemukan! Memulai Server Hop...")
+                task.spawn(ServerHop)
+                task.wait(5) -- Jeda aman penahanan loop script
+                return
+            end
+        else
+            hopTimer = 0 -- Reset timer jika fitur Auto Hop dimatikan user
+        end
+
+        -- Jalankan teleportasi tunggu spawn ke koordinat EntitiesPos selagi menunggu waktu Hop
+        if targetIDToFind then
+            local spawnPos = getSpawnPosition(targetIDToFind)
+            if spawnPos then
+                hum.PlatformStand = true
+                hrp.Velocity = Vector3.zero
+                local currentHeight = tonumber(Settings.Height) or 25
+                hrp.CFrame = CFrame.new(spawnPos + Vector3.new(0, currentHeight, 0))
+            end
+        end
+        return 
+    else
+        -- Jika monster kembali ditemukan sebelum waktu tunda habis, reset timer ke 0 kembali
+        hopTimer = 0
+    end
+
+
+    --------------------------------------------------
+    -- 3. EKSEKUSI TELEPORT & ATTACK SAMBIL MENGORBIT
+    --------------------------------------------------
+    if currentTarget and isValidTarget(currentTarget) then
+        local tPart = currentTarget:FindFirstChild("HumanoidRootPart") or currentTarget.PrimaryPart
+        if tPart then
+            hum.PlatformStand = true
+            hrp.Velocity = Vector3.zero
+            hrp.RotVelocity = Vector3.zero
+            
+            local orbitSpeed = tonumber(Settings.OrbitSpeed) or 4 
+            local angle = tick() * orbitSpeed
+            
+            local radius = tonumber(Settings.Radius) or 35
+            local height = tonumber(Settings.Height) or 25
+            
+            local offsetX = math.cos(angle) * radius
+            local offsetZ = math.sin(angle) * radius
+            local targetPos = tPart.Position + Vector3.new(offsetX, height, offsetZ)
+
+            hrp.CFrame = CFrame.new(targetPos, tPart.Position)
+
+            -- Sistem Auto Skill Cast
+            if tick() - lastAttack > (tonumber(Settings.AttackDelay) or 0) then
+                lastAttack = tick()
+                local wID = getWeapon()
+                if wID then 
+                    pcall(function() RemoteFunc:InvokeServer("\229\136\135\230\141\162\230\137\139\230\140\129\231\137\169\229\147\129", tostring(wID)) end) 
+                end
+                
+                                --------------------------------------------------
+                -- MODIFIKASI: MULTI ATTACK 4 JADI PRIORITAS UTAMA
+                --------------------------------------------------
+                                   --------------------------------------------------
+                   -- MODIFIKASI: TIMING TERPISAH (SKILL 4 SPAM, SKILL 1&2 TIAP 3 DETIK)
+                   --------------------------------------------------
+                   local attackList = {}
+                   
+                   -- 1. PRIORITAS UTAMA: JIKA MULTI ATTACK 4 ON, LANGSUNG MASUKKAN (TANPA JEDA)
+                   if Settings.MultiAttack4 then
+                       for i = 1, 8 do
+                           table.insert(attackList, 4)
+                       end
+                   end
+                   
+                   -- 2. KONDISI KHUSUS: JIKA AUTO ATTACK ON, CEK APAKAH SUDAH BERLALU 3 DETIK?
+                   if Settings.AutoAttack then
+                       if tick() - lastSkill12Attack >= 3 then
+                           lastSkill12Attack = tick() -- Reset timer internal ke 0 kembali
+                           table.insert(attackList, 1)
+                           table.insert(attackList, 2)
+                       end
+                   end
+                   
+                   -- Antisipasi jika Multi Attack OFF dan Skill 1&2 belum waktunya keluar
+                   -- Kita masukkan hit dasar (Skill 1) agar script tidak dikira macet/berhenti
+                   if #attackList == 0 and not Settings.MultiAttack4 then
+                       table.insert(attackList, 1)
+                   end
+                   --------------------------------------------------
+
+
+                
+                for _, s in pairs(attackList) do
+                    task.spawn(function()
+                        SkillEvent:FireServer(s, {
+                            targetCF = tPart.CFrame, 
+                            moveDirectionStr = "Forward", 
+                            clientPredictCastId = HttpService:GenerateGUID(false), 
+                            characterType = "Player", 
+                            releaseCF = hrp.CFrame, 
+                            characterId = 0, 
+                            trackTargetId = currentTarget.Name
+                        })
+                    end)
+                end
+            end
+        end
+    else
+        if hum.PlatformStand then
+            hum.PlatformStand = false
+        end
+    end
+end)
+
+
+--------------------------------------------------
+-- GAME LOGIC LOOPS (FULL TASK.SPAWN VERSION)
+--------------------------------------------------
+
+-- 1. Loop: Auto Stats (Tetap 0.6 detik)
+task.spawn(function()
+    while true do
+        task.wait(0.6)
+        for id, stat in pairs(Settings.AutoStats) do
+            if stat.enabled then SendStatPoint(id, stat.amount) end
+        end
+    end
+end)
+
+-- 2. Loop: Auto Quest (Tetap 2 detik)
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if Settings.AutoQuest then
+            for qID, active in pairs(Settings.SelectedQuests) do
+                if active then
+                    pcall(function() talkFunc:InvokeServer("\229\143\145\230\148\190\228\187\187\229\138\161", {qID}) end)
+                    task.wait(0.5)
+                    pcall(function() 
+                        RemoteEvent:FireServer("\232\167\166\229\143\145\232\129\138\229\164\169", {"\229\147\136\229\136\169\229\155\160\231\137\185", "10010100"})
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- 3. Loop: AUTO UPGRADE MATERIAL & POTION BAG (Setiap 1 Detik)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        
+        if Settings.AutoUpgradeMaterialBag then
+            pcall(function()
+                RemoteFunc:InvokeServer("\232\131\140\229\140\133\229\174\185\233\135\143\233\135\145\229\184\129\229\141\135\231\186\167", { itemTp = 2 })
+            end)
+        end
+
+        if Settings.AutoUpgradePotionBag then
+            pcall(function()
+                RemoteFunc:InvokeServer("\232\131\140\229\140\133\229\174\185\233\135\143\233\135\145\229\184\129\229\141\135\231\186\167", { itemTp = 9 })
+            end)
+        end
+    end
+end)
+
+-- 4. Loop: AUTO BUY WAND (Eksekusi 1x Langsung Auto-OFF)
+task.spawn(function()
+    while true do
+        task.wait(0.5) -- Scan cepat status tombol UI setiap 0.5 detik
+        
+        -- Cek Wand 30
+        if Settings.AutoBuyWand30 then
+            pcall(function() 
+                RemoteFunc:InvokeServer("\232\180\173\228\185\176\232\163\133\229\164\135", {equipID = 6000006}) 
+            end)
+            Settings.AutoBuyWand30 = false -- <--- MEMATIKAN FITUR INSTAN SETELAH 1X KLIK
+        end
+
+        -- Cek Wand 20
+        if Settings.AutoBuyWand20 then
+            pcall(function() 
+                RemoteFunc:InvokeServer("\232\180\173\228\185\176\232\163\133\229\164\135", {equipID = 6000007}) 
+            end)
+            Settings.AutoBuyWand20 = false -- <--- MEMATIKAN FITUR INSTAN SETELAH 1X KLIK
+        end
+    end
+end)
+
+-- 5. Loop: Rebirth, Collect, Sell Dasar (Setiap 15 Detik)
+task.spawn(function()
+    while task.wait(15) do
+        if Settings.AutoRebirth then pcall(function() RemoteFunc:InvokeServer("\233\135\141\231\148\159") end) end
+        if Settings.AutoCollect and workspace:FindFirstChild("Drops") then
+            for _, f in pairs(workspace.Drops:GetChildren()) do
+                for _, d in pairs(f:GetChildren()) do if tonumber(d.Name) then RemoteEvent:FireServer("pick", d.Name) end end
+            end
+        end
+        if Settings.SilentSell then
+            pcall(function()
+                local sGui = playerGui:FindFirstChild("ScreenGui")
+                local sellPop = sGui and sGui:FindFirstChild("SellPop")
+                if sellPop then
+                    talkFunc:InvokeServer("\230\137\147\229\188\128\231\149\140\233\157\162", {"SellPop"})
+                    sellPop.Visible = false
+                    local idL, countL = {}, {}
+                    for _, slot in pairs(sellPop.ContentClip.Main._BagFrame:GetChildren()) do
+                        local itemID = slot.Name:match("SellSlot_(%d+)")
+                        if itemID then table.insert(idL, tonumber(itemID)); table.insert(countL, 1) end
+                    end
+                    if #idL > 0 then RemoteFunc:InvokeServer("\229\135\186\229\148\174\232\131\140\229\140\133\231\137\169\229\147\129", {["onlyIDList"] = idL, ["countList"] = countL}) end
+                end
+            end)
+        end
+    end
+end)
+
+-- 6. Loop: Potion Logic (V1 & V2)
+task.spawn(function()
+    while true do
+        task.wait(math.clamp(Settings.PotionSpeed, 0.1, 5))
+        
+        if Settings.AutoPotionV1 then
+            local selectedMats = {}
+            for id, d in pairs(PotionMaterials) do 
+                if d.selected and d.count > 0 then 
+                    selectedMats[tostring(id)] = d.count 
+                end 
+            end
+
+            if next(selectedMats) then
+                pcall(function()
+                    RemoteFunc:InvokeServer("\231\130\188\232\141\175", {
+                        cauldronID = 8000001,
+                        materials = selectedMats,
+                        gameScore = 100
+                    })
+                    task.wait(0.1)
+                    RemoteFunc:InvokeServer("\231\130\188\232\141\175\230\184\184\230\136\143\229\188\128\229\167\139", {
+                        cauldronID = 8000001,
+                        materials = selectedMats
+                    })
+                end)
+            end
+
+        elseif Settings.AutoPotionV2 then
+            for _, p in ipairs(PotionList) do
+                if not Settings.AutoPotionV2 then break end 
+                
+                local id = p.id
+                local d = PotionMaterials[id]
+                
+                if d and d.selected and d.count > 0 then
+                    pcall(function()
+                        local matData = {[tostring(id)] = d.count}
+                        RemoteFunc:InvokeServer("\231\130\188\232\141\175", {
+                            cauldronID = 8000001,
+                            materials = matData,
+                            gameScore = 100
+                        })
+                        task.wait(0.1)
+                        RemoteFunc:InvokeServer("\231\130\188\232\141\175\230\184\184\230\136\143\229\188\128\229\167\139", {
+                            cauldronID = 8000001,
+                            materials = matData
+                        })
+                    end)
+                    task.wait(Settings.PotionSpeed)
+                end
+            end
+        end
+    end
+end)
+
+-- 7. Loop: Auto Give Item / Gift Menu V2 (Tetap 30 detik)
+task.spawn(function()
+    while true do
+        task.wait(30)
+        
+        if AutoGiveEnabled and SelectedTargetPlayer and SelectedTargetPlayer.Parent == game.Players and GiftRequest then
+            local detectedIDs = scanBagForItems()
+            
+            if #detectedIDs > 0 then
+                for _, itemId in ipairs(detectedIDs) do
+                    if not AutoGiveEnabled or not SelectedTargetPlayer or SelectedTargetPlayer.Parent ~= game.Players then 
+                        break 
+                    end
+                    
+                    print("KIIBOO LOG: Mengirim Item ID " .. itemId .. " ke " .. SelectedTargetPlayer.Name)
+                    
+                    local selectArgs = {
+                        "\230\139\191\232\181\183\232\141\175\230\176\180", 
+                        itemId
+                    }
+                    pcall(function()
+                        RemoteFunc:InvokeServer(unpack(selectArgs))
+                    end)
+                    
+                    task.wait(0.3) 
+                    
+                    local giftArgs = {
+                        SelectedTargetPlayer.UserId
+                    }
+                    pcall(function()
+                        GiftRequest:FireServer(unpack(giftArgs))
+                    end)
+                    
+                    task.wait(0.7)
+                end
+            end
+            
+        elseif AutoGiveEnabled and (not SelectedTargetPlayer or SelectedTargetPlayer.Parent ~= game.Players) then
+            AutoGiveEnabled = false
+            SelectedTargetPlayer = nil
+            if DropdownGiveBtn then DropdownGiveBtn.Text = "Target DC / Pilih Lagi" end
+            updateGiveButtonDisplay()
+        end
+    end
+end)
+
+-- Loop Anti-Render (FPS Booster)
+game:GetService("RunService").RenderStepped:Connect(function()
+    if Settings.AntiRender then
+        game:GetService("RunService"):Set3dRenderingEnabled(false)
+    else
+        game:GetService("RunService"):Set3dRenderingEnabled(true)
+    end
+end)
+
+
+print("KIIBOO ULTIMATE FINAL - GABUNGAN GIVE MENU V2 BERHASIL MUAT")
