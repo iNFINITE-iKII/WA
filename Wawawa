@@ -15,14 +15,14 @@ if playerGui:FindFirstChild("KIIBOO_ULTIMATE_FINAL") then playerGui.KIIBOO_ULTIM
 -- CONFIG & SETTINGS
 --------------------------------------------------
 local Settings = {
-    AutoHop = true, 
+    AutoHop = false, 
     HopDelay = 2,  
     AutoUpgradeMaterialBag = false,
     AutoUpgradePotionBag = false,
     AutoBuyWand30 = false,
 AutoBuyWand20 = false,
-AntiRender = true,
-AutoFarm = true, 
+AntiRender = false,
+AutoFarm = false, 
 AutoAttack = true, 
 MultiAttack4 = true, 
 AutoCollect = true, 
