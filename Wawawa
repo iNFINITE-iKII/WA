@@ -28,7 +28,7 @@ MultiAttack4 = true,
 AutoCollect = true, 
 AutoRebirth = true,
     AutoPotionV1 = false, 
-AutoPotionV2 = true, 
+AutoPotionV2 = false, 
 SilentSell = false,
 
     AutoQuest = true, AntiAFK = true,
