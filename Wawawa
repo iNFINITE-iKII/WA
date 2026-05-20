@@ -16,7 +16,7 @@ if playerGui:FindFirstChild("KIIBOO_ULTIMATE_FINAL") then playerGui.KIIBOO_ULTIM
 --------------------------------------------------
 local Settings = {
     AutoHop = true, 
-    HopDelay = 3,  
+    HopDelay = 2,  
     AutoUpgradeMaterialBag = false,
     AutoUpgradePotionBag = false,
     AutoBuyWand30 = false,
@@ -39,7 +39,7 @@ Radius = 35,
     PotionSpeed = 6, 
 PotionLimit = 0, 
 PotionCounter = 0,
-    ActiveIDs = {["5000005"] = true }, 
+    ActiveIDs = {}, 
 PriorityIDs = { ["5000006"] = true },     SelectedQuests = {
         ["\228\187\187\229\138\1616"] = true,
        ["\228\187\187\229\138\1615"] = true,
